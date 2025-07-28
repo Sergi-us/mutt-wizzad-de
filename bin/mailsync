@@ -1,0 +1,128 @@
+#!/bin/sh
+## 2025-07-28
+
+# - Synchronisiert E-Mails für alle Konten oder ein einzelnes Konto als Argument.
+# - Zeigt eine Benachrichtigung mit der Anzahl neuer E-Mails.
+# - Zeigt für jede neue E-Mail eine Benachrichtigung mit dem Betreff.
+# - Führt notmuch aus, um neue E-Mails zu indizieren.
+# - Dieses Skript kann als Cron-Job für automatische Mail-Synchronisation eingerichtet werden.
+
+# Nur ausführen, wenn nicht bereits in einer anderen Instanz läuft
+pgrep mbsync >/dev/null && { echo "mbsync läuft bereits."; exit ;}
+
+# Zuerst müssen wir die richtigen Variablen für die mbsync-Datei, das pass-Archiv,
+# notmuch und das GPG-Home holen. Dies geschieht durch Durchsuchen gängiger
+# Profil-Dateien nach Variablenzuweisungen.
+eval "$(grep -h -- \
+	"^\s*\(export \)\?\(MBSYNCRC\|MPOPRC\|PASSWORD_STORE_DIR\|PASSWORD_STORE_GPG_OPTS\|NOTMUCH_CONFIG\|GNUPGHOME\|MAILSYNC_MUTE\|XDG_CONFIG_HOME\|XDG_DATA_HOME\)=" \
+	"$HOME/.profile" "$HOME/.bash_profile" "$HOME/.zprofile"  "$HOME/.config/zsh/.zprofile" "$HOME/.zshenv" \
+	"$HOME/.config/zsh/.zshenv" "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.config/zsh/.zshrc" \
+	"$HOME/.pam_environment" 2>/dev/null)"
+
+# Für nicht-interaktive Shell (z.B. Cron-Job): Prüfe ob GPG-Schlüssel entsperrt sind
+if ! tty -s; then
+	# Setze Display-Variablen sofort (schneller)
+	export DISPLAY="${DISPLAY:-:0}"
+	export GPG_TTY="$(tty || echo /dev/tty)"
+
+	# Starte GPG-Agent falls nicht läuft (reduziert Wartezeit)
+	gpg-connect-agent /bye >/dev/null 2>&1
+
+	# Einzelner Test mit direktem GUI-Pinentry
+	if ! echo "dummy" | gpg --sign --batch -o /dev/null > /dev/null 2>&1; then
+		# Direkt GUI-Pinentry versuchen (ohne den error-Mode Test)
+		if ! echo "dummy" | gpg --sign -o /dev/null > /dev/null 2>&1; then
+			# Benachrichtige den Benutzer
+			notify-send --app-name="Mail-Sync" "GPG-Schlüssel gesperrt" "E-Mail-Synchronisation übersprungen. Bitte Schlüssel manuell entsperren."
+			exit 1
+		fi
+	fi
+fi
+
+export GPG_TTY="$(tty)"
+
+[ -n "$MBSYNCRC" ] && alias mbsync="mbsync -c $MBSYNCRC" || MBSYNCRC="$HOME/.mbsyncrc"
+[ -n "$MPOPRC" ] || MPOPRC="$HOME/.config/mpop/config"
+
+lastrun="${XDG_CONFIG_HOME:-$HOME/.config}/mutt/.mailsynclastrun"
+
+# Einstellungen sind unterschiedlich für MacOS (Darwin) Systeme.
+case "$(uname)" in
+	Darwin) notify() { osascript -e "display notification \"$2\" with title \"$1\"" ;} ;;
+	*)
+	case "$(readlink -f /sbin/init)" in
+		*systemd*|*openrc*) export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus ;;
+	esac
+	# Merke ob ein Display-Server läuft
+	pgrepoutput="$(pgrep -ax X\(\|org\|wayland\))"
+	displays="$(echo "$pgrepoutput" | grep -wo "[0-9]*:[0-9]\+" | sort -u)"
+	[ -z "$displays" ] && [ -d /tmp/.X11-unix ] && displays=$(cd /tmp/.X11-unix && for x in X*; do echo ":${x#X}"; done)
+
+	notify() { [ -n "$pgrepoutput" ] && for x in ${displays:-:0}; do
+			export DISPLAY="$x"
+			notify-send --app-name="Mail-Sync" -- "$1" "$2"
+		done ;}
+	;;
+esac
+
+# Prüfe Konto auf neue E-Mails. Benachrichtige bei neuem Inhalt.
+syncandnotify() {
+	case "$1" in
+		imap) mbsync -q "$2" ;;
+		pop) mpop -q "$2" ;;
+	esac
+	new=$(find\
+		"$HOME/.local/share/mail/$2/"[Ii][Nn][Bb][Oo][Xx]/new/ \
+		"$HOME/.local/share/mail/$2/"[Ii][Nn][Bb][Oo][Xx]/cur/ \
+		-type f -newer "$lastrun" 2> /dev/null)
+	newcount=$(echo "$new" | sed '/^\s*$/d' | wc -l)
+	case 1 in
+		$((newcount > 5)) )
+			echo "$newcount neue E-Mails für $2." >/dev/tty
+			[ -z "$MAILSYNC_MUTE" ] && notify "Neue E-Mails!" "📬 $newcount neue E-Mails im Konto \`$2\`."
+			;;
+		$((newcount > 0)) )
+			echo "$newcount neue E-Mail(s) für $2." >/dev/tty
+			[ -z "$MAILSYNC_MUTE" ] &&
+			for file in $new; do
+				# Extrahiere und dekodiere Betreff und Absender aus E-Mail.
+				subject=$(awk '/^Subject: / && ++n == 1,/^.*: / && ++i == 2' "$file" | head -n-1 |
+					perl -CS -MEncode -ne 'print decode("MIME-Header", $_)' |
+					sed 's/^Subject: //' | tr -d '\n\t')
+				from="$(sed -n "/^From:/ s|From: *|| p" "$file" |
+					perl -CS -MEncode -ne 'print decode("MIME-Header", $_)')"
+				from="${from% *}" ; from="${from%\"}" ; from="${from#\"}"
+				notify "📧$from:" "$subject"
+			done
+			;;
+		*) echo "Keine neuen E-Mails für $2." ;;
+esac
+}
+
+allaccounts="$(grep -hs "^\(Channel\|account\)" "$MBSYNCRC" "$MPOPRC")"
+
+# Hole zu synchronisierende Konten. Alle wenn kein Argument. Präfix mit `error` wenn nicht vorhanden.
+IFS='
+'
+if [ -z "$1" ]; then
+	tosync="$allaccounts"
+else
+	tosync="$(for arg in "$@"; do for availacc in $allaccounts; do
+		[ "$arg" = "${availacc##* }" ] && echo "$availacc" && break
+	done || echo "error $arg"; done)"
+fi
+
+for account in $tosync; do
+	case $account in
+		Channel*) syncandnotify imap "${account##* }" & ;;
+		account*) syncandnotify pop "${account##* }" & ;;
+		error*) echo "FEHLER: Konto ${account##* } nicht gefunden." ;;
+	esac
+done
+
+wait
+
+notmuch new --quiet
+
+# Erstelle eine Touch-Datei, die die Zeit des letzten mailsync-Laufs anzeigt
+touch "$lastrun"
