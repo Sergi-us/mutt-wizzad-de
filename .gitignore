@@ -1,4 +1,5 @@
 personal.muttrc
+AGENTS.md
 *.swp
 *.gpg
 *.pyc
