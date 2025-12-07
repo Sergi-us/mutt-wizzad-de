@@ -1,52 +1,50 @@
 .TH MAILSYNC 1
 .SH NAME
-mailsync \- sync mail accounts set up with
-.B mw.
-.SH SYNOPSIS
+mailsync \- synchronisiert E-Mail-Konten, die mit
+.B mw
+eingerichtet wurden.
+.SH ÜBERSICHT
 .B mailsync
 [
-.I OPTIONS
+.I OPTIONEN
 ]... [
-.I ACCOUNTS
+.I KONTEN
 ]
-.SH DESCRIPTION
+.SH BESCHREIBUNG
 .B mailsync
-syncs the mail of all accounts set up with
-.B
-mw,
-or if account names are given, syncs only those accounts.
+synchronisiert die E-Mails aller mit
+.B mw
+eingerichteten Konten, oder wenn Kontonamen angegeben werden, synchronisiert es nur diese Konten.
 
-.B
-mailsync
-is a wrapper for
+.B mailsync
+ist ein Wrapper für
 .B mbsync
-and
-.B
-mpop,
-but also automatically reindexes new mail with
+und
+.B mpop,
+aber indiziert auch automatisch neue E-Mails mit
 .B notmuch,
-gives notifications if new mail is found and can also be set as a cronjob to sync and index mail quietly in the background.
-.SH COMMANDS
+gibt Benachrichtigungen aus, wenn neue E-Mails gefunden werden, und kann auch als Cronjob eingestellt werden, um E-Mails im Hintergrund still zu synchronisieren und zu indizieren.
+.SH BEFEHLE
 .TP
 .B mailsync
-sync all mail accounts and notify user if there is new mail
+alle E-Mail-Konten synchronisieren und Benutzer benachrichtigen, wenn es neue E-Mails gibt
 .TP
-.B mailsync account@example.org
-only sync the
-.B account@example.org
-account.
-.SH CONFIGURATION
-While
-.B
-mailsync
-gives notifications on the arrival of new mail by default, this can be diabled by setting the variable
-.I
-MAILSYNC_MUTE=1.
-.SH AUTHORS
-Written by Luke Smith <luke@lukesmith.xyz> originally in 2018.
-.SH LICENSE
+.B mailsync konto@beispiel.de
+nur das Konto
+.B konto@beispiel.de
+synchronisieren.
+.SH KONFIGURATION
+Während
+.B mailsync
+standardmäßig Benachrichtigungen beim Eintreffen neuer E-Mails gibt, kann dies durch Setzen der Variable
+.I MAILSYNC_MUTE=1
+deaktiviert werden.
+.SH AUTOREN
+Ursprünglich 2018 geschrieben von Luke Smith <luke@lukesmith.xyz>.
+Deutsche Version und Anpassungen von Sergius.
+.SH LIZENZ
 GPLv3
-.SH SEE ALSO
+.SH SIEHE AUCH
 .BR mw (1),
 .BR neomutt (1),
 .BR neomuttrc (1)
