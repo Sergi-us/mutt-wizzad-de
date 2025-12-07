@@ -1,5 +1,12 @@
 # mutt-wizard Agent-Richtlinien
 
+## Git-Workflow
+- **WICHTIG**: Der Benutzer führt alle Git-Operationen selbst durch
+- Agent darf NICHT automatisch committen oder pushen
+- Agent kann Änderungen vorbereiten und Status zeigen
+- Agent soll dem Benutzer mitteilen, welche Dateien geändert wurden
+- Benutzer entscheidet, wann und wie committed/gepusht wird
+
 ## Build/Test-Befehle
 - **Hauptinstallation**: `sudo make install` (installiert nach /usr/local)
 - **Installation testen**: `mw -h` (zeigt Hilfe an)
