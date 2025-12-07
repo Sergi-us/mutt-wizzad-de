@@ -20,9 +20,9 @@ msmtptemp="$muttshare/msmtp-temp"
 onlinetemp="$muttshare/online-temp"
 notmuchtemp="$muttshare/notmuch-temp"
 imapnotifytemp="$muttshare/imapnotify-temp"
-# With the use of templates, it's impossible to use parameter substitution.
-# Therefore, some default variables that might be otherwise overwritten are set
-# here.
+# Durch die Verwendung von Templates ist Parameter-Substitution unmöglich.
+# Daher werden hier einige Standard-Variablen gesetzt, die andernfalls
+# überschrieben werden könnten.
 iport="993"
 sport="465"
 imapssl="IMAPS"
@@ -31,12 +31,12 @@ maxmes="0"
 
 alias mbsync='mbsync -c "$mbsyncrc"'
 
-# mbsync >=1.4.0 requires "Far/Near" rather than "Master/Slave."
+# mbsync >=1.4.0 benötigt "Far/Near" anstatt "Master/Slave."
 mbver="$(mbsync -v)"
 mbver="${mbver#* }"
 mbver="${mbver%.*}"
-# Comparing two float numbers in bash is a pain in the butt, so we get rid of
-# dots and turn them into nice integers
+# Der Vergleich zweier Fließkommazahlen in Bash ist umständlich, daher
+# entfernen wir die Punkte und machen daraus schöne Ganzzahlen
 mbver="${mbver/\./}"
 if [ "${mbver}" -gt 14 ]; then
 	master="Far"
@@ -52,14 +52,14 @@ for x in "/etc/ssl/certs/ca-certificates.crt" \
 	"/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem" \
 	"/usr/local/share/ca-certificates/"; do
 	[ -f "$x" ] && sslcert="$x" && break
-done || { echo "CA Certificate not found. Please install one or link it to /etc/ssl/certs/ca-certificates.crt" && exit 1; }
+done || { echo "CA-Zertifikat nicht gefunden. Bitte installieren Sie eins oder verlinken Sie es nach /etc/ssl/certs/ca-certificates.crt" && exit 1; }
 
 checkbasics() {
 	command -V gpg >/dev/null 2>&1 && GPG="gpg" || GPG="gpg2"
 	PASSWORD_STORE_DIR="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 	[ -r "$PASSWORD_STORE_DIR/.gpg-id" ] || {
-		echo "First run \`pass init <yourgpgemail>\` to set up a password archive."
-		echo "(If you don't already have a GPG key pair, first run \`$GPG --full-generate-key\`.)"
+		echo "Führen Sie zuerst \`pass init <ihre-gpg-email>\` aus, um ein Passwort-Archiv einzurichten."
+		echo "(Falls Sie noch kein GPG-Schlüsselpaar haben, führen Sie zuerst \`$GPG --full-generate-key\` aus.)"
 		exit 1
 	}
 }
@@ -95,7 +95,7 @@ prepmutt() {
 	[ ! -f "$muttrc" ] && echo "# vim: filetype=neomuttrc" >"$muttrc"
 	! grep -q "^source.*mutt-wizard.muttrc" "$muttrc" && echo "source $muttshare/mutt-wizard.muttrc" >>"$muttrc"
 	! grep "^source.*.muttrc" "$muttrc" | grep -qv "$muttshare/mutt-wizard.muttrc" && echo "source $accdir/$fulladdr.muttrc" >>"$muttrc"
-	echo "macro index,pager i$idnum '<sync-mailbox><enter-command>source $accdir/$fulladdr.muttrc<enter><change-folder>!<enter>;<check-stats>' \"switch to $fulladdr\"" >>"$muttrc"
+	echo "macro index,pager i$idnum '<sync-mailbox><enter-command>source $accdir/$fulladdr.muttrc<enter><change-folder>!<enter>;<check-stats>' \"zu $fulladdr wechseln\"" >>"$muttrc"
 	neomutt -v | grep -q lmdb && ! grep -q "^set header_cache_backend.*lmdb" "$muttrc" && echo "set header_cache_backend = \"lmdb\"" >>"$muttrc"
 }
 
@@ -137,7 +137,7 @@ EOF
 
 delete() {
 	if [ -z "${fulladdr+x}" ]; then
-		echo "Select the account you would like to delete (by number):"
+		echo "Wählen Sie das Konto aus, das Sie löschen möchten (nach Nummer):"
 		list || exit 1
 		read -r input
 		match="^\s*$input\s\+"
@@ -148,7 +148,7 @@ delete() {
 
 	fulladdr="$(echo "$accounts" | grep "$match" | grep -o "\S*@\S*")"
 
-	[ -z "$fulladdr" ] && echo "$fulladdr is not a valid account name." && return 1
+	[ -z "$fulladdr" ] && echo "$fulladdr ist kein gültiger Kontoname." && return 1
 
 	sed -ibu "/IMAPStore $fulladdr-remote$/,/# End profile/d" "$mbsyncrc" 2>/dev/null
 	rm -f "$mbsyncrc"bu
@@ -164,20 +164,20 @@ delete() {
 }
 
 askinfo() {
-	[ -z "$fulladdr" ] && echo "Give the full email address to add:" &&
+	[ -z "$fulladdr" ] && echo "Geben Sie die vollständige E-Mail-Adresse ein, die hinzugefügt werden soll:" &&
 		read -r fulladdr
 	while ! echo "$fulladdr" | grep -qE "^.+@.+\.[A-Za-z]+$"; do
-		echo "$fulladdr is not a valid email address. Please retype the address:"
+		echo "$fulladdr ist keine gültige E-Mail-Adresse. Bitte geben Sie die Adresse erneut ein:"
 		read -r fulladdr
 	done
 	folder="$maildir/$fulladdr"
 	getaccounts
 	echo "$accounts" | grep -q "\s$fulladdr$" 2>/dev/null &&
-		{ echo "$fulladdr has already been added" && exit 1; }
+		{ echo "$fulladdr wurde bereits hinzugefügt" && exit 1; }
 	{ [ -z "$imap" ] || [ -z "$smtp" ]; } && parsedomains
-	[ -z "$imap" ] && echo "Give your email server's IMAP address (excluding the port number):" &&
+	[ -z "$imap" ] && echo "Geben Sie die IMAP-Adresse Ihres E-Mail-Servers ein (ohne Portnummer):" &&
 		read -r imap
-	[ -z "$smtp" ] && echo "Give your email server's SMTP address (excluding the port number):" &&
+	[ -z "$smtp" ] && echo "Geben Sie die SMTP-Adresse Ihres E-Mail-Servers ein (ohne Portnummer):" &&
 		read -r smtp
 	case $sport in
 	587) tlsline="# tls_starttls" ;;
@@ -198,15 +198,15 @@ insertpass() {
 }
 
 errorexit() {
-	echo "Log-on not successful."
+	echo "Anmeldung nicht erfolgreich."
 	case "$imap" in
 	imap.gmail.com)
-		echo "This account with $service is using Google's Gmail servers, which disable all third-party applications without an application-specific password.
-Please be sure you are using OAUTH with your Gmail account, or better yet, stop using Gmail."
+		echo "Dieses Konto mit $service verwendet Googles Gmail-Server, die alle Drittanbieter-Anwendungen ohne ein anwendungsspezifisches Passwort deaktivieren.
+Stellen Sie sicher, dass Sie OAUTH mit Ihrem Gmail-Konto verwenden, oder noch besser: Hören Sie auf, Gmail zu nutzen."
 		;;
 	imap.mail.me.com)
-		echo "This account with $service is using Apple's iCloud servers, which disable all non-Apple applications by default.
-Please be sure you either enable third-party applications, or create an app-specific password, or best of all, stop using Apple."
+		echo "Dieses Konto mit $service verwendet Apples iCloud-Server, die standardmäßig alle Nicht-Apple-Anwendungen deaktivieren.
+Stellen Sie sicher, dass Sie entweder Drittanbieter-Anwendungen aktivieren oder ein App-spezifisches Passwort erstellen, oder am besten: Hören Sie auf, Apple zu nutzen."
 		;;
 	esac
 	exit 1
@@ -240,7 +240,7 @@ finalize() {
 	echo "$toappend" >>"$accdir/$fulladdr.muttrc"
 	[ "$type" != "online" ] && echo "$mailboxes" | xargs -I {} mkdir -p "$maildir/$fulladdr/{}/cur" "$maildir/$fulladdr/{}/tmp" "$maildir/$fulladdr/{}/new"
 	mkdir -p "$cachedir/$safename/bodies"
-	echo "$fulladdr (account #$idnum) added successfully."
+	echo "$fulladdr (Konto #$idnum) erfolgreich hinzugefügt."
 	command -V urlview >/dev/null 2>&1 && [ ! -f "$HOME/.urlview" ] && echo "COMMAND \$BROWSER" >"$HOME/.urlview"
 	return 0
 }
@@ -255,11 +255,11 @@ togglecron() {
 	cron="$(mktemp)"
 	crontab -l >"$cron"
 	if grep -q mailsync "$cron"; then
-		echo "Removing automatic mailsync..."
+		echo "Entferne automatische Mailsynchronisation..."
 		sed -ibu /mailsync/d "$cron"
 		rm -f "$cron"bu
 	else
-		echo "Adding automatic mailsync every ${cronmin:-10} minutes..."
+		echo "Füge automatische Mailsynchronisation alle ${cronmin:-10} Minuten hinzu..."
 		echo "*/${cronmin:-10} * * * * $prefix/bin/mailsync" >>"$cron"
 	fi &&
 		crontab "$cron"
@@ -267,8 +267,8 @@ togglecron() {
 }
 
 setact() { if [ -n "${action+x}" ] && [ "$action" != "$1" ]; then
-	echo "Running $1 with $action..."
-	echo "Incompatible options given. Only one action may be specified per run."
+	echo "Führe $1 mit $action aus..."
+	echo "Inkompatible Optionen angegeben. Pro Ausführung kann nur eine Aktion angegeben werden."
 	exit 1
 else
 	action="$1"
@@ -276,44 +276,44 @@ fi; }
 
 mwinfo() {
 	cat <<EOF
-mw: mutt-wizard, auto-configure email accounts for mutt
-including downloadable mail with \`isync\`.
+mw: mutt-wizard - E-Mail-Konten automatisch für mutt konfigurieren,
+    einschließlich herunterladbarer E-Mails mit \`mbsync\`.
 
-Main actions:
-  -a your@email.com	Add an email address
-  -l			List email addresses configured
-  -d			Remove an already added address
-  -D your@email.com	Force remove account without confirmation
-  -t number		Toggle automatic mailsync every <number> minutes
-  -T			Toggle automatic mailsync
-  -r			Reorder account numbers
+Hauptaktionen:
+  -a ihre@email.com	E-Mail-Adresse hinzufügen
+  -l			Konfigurierte E-Mail-Adressen auflisten
+  -d			Bereits hinzugefügte Adresse entfernen
+  -D ihre@email.com	Konto ohne Bestätigung erzwungen entfernen
+  -t Zahl		Automatische Mailsynchronisation alle <Zahl> Minuten umschalten
+  -T			Automatische Mailsynchronisation umschalten
+  -r			Kontonummern neu ordnen
 
-Options allowed with -a:
-  -u	Account login name if not full address
-  -n	"Real name" to be on the email account
-  -i	IMAP/POP server address
-  -I	IMAP/POP server port
-  -s	SMTP server address
-  -S	SMTP server port
-  -x	Password for account (recommended to be in double quotes)
-  -p	Add for a POP server instead of IMAP.
-  -P	Pass Prefix (prefix of the file where password is stored)
-  -X	Delete an account's local email too when deleting.
-  -o	Configure address, but keep mail online.
-  -f	Assume typical English mailboxes without attempting log-on.
+Optionen, die mit -a erlaubt sind:
+  -u	Konto-Login-Name, falls nicht die vollständige Adresse
+  -n	"Echter Name" für das E-Mail-Konto
+  -i	IMAP/POP-Serveradresse
+  -I	IMAP/POP-Server-Port
+  -s	SMTP-Serveradresse
+  -S	SMTP-Server-Port
+  -x	Passwort für das Konto (empfohlen in doppelten Anführungszeichen)
+  -p	Für einen POP-Server statt IMAP hinzufügen
+  -P	Pass-Präfix (Präfix der Datei, in der das Passwort gespeichert wird)
+  -X	Auch lokale E-Mails eines Kontos beim Löschen entfernen
+  -o	Adresse konfigurieren, aber E-Mails online behalten
+  -f	Typische englische Mailboxen annehmen, ohne Login-Versuch
 
-NOTE: Once at least one account is added, you can run
-\`mbsync -a\` to begin downloading mail.
+HINWEIS: Sobald mindestens ein Konto hinzugefügt wurde, können Sie
+\`mbsync -a\` ausführen, um den E-Mail-Download zu starten.
 
-To change an account's password, run \`pass edit '$passprefix'your@email.com\`.
+Um das Passwort eines Kontos zu ändern, führen Sie \`pass edit '$passprefix'ihre@email.com\` aus.
 EOF
 }
 
 reorder() {
 	tempfile="$(mktemp -u)"
 	trap 'rm -f $tempfile' HUP INT QUIT TERM PWR EXIT
-	echo "# Carefully reorder these accounts with the desired numbers in the first column.
-# DO NOT reorder rows or rename the accounts in the second column." >"$tempfile"
+	echo "# Ordnen Sie diese Konten vorsichtig mit den gewünschten Nummern in der ersten Spalte neu.
+# Ordnen Sie NICHT die Zeilen neu oder benennen Sie die Konten in der zweiten Spalte um." >"$tempfile"
 	sed -n "
 	/ i[0-9] / s?\(.* i\|'<sync.*/\|\.muttrc.*\)??g p
 	" "$muttrc" >>"$tempfile"
@@ -328,7 +328,7 @@ reorder() {
 	rm -f "$muttrc"bu
 	awk -v a="$accdir" -v d="$default" ' BEGIN { print "source "a"/"d".muttrc" }
 		{
-		print "macro index,pager i"$1" '\''<sync-mailbox><enter-command>source "a"/"$2".muttrc<enter><change-folder>!<enter>;<check-stats>'\'' \"switch to "$2"\""
+		print "macro index,pager i"$1" '\''<sync-mailbox><enter-command>source "a"/"$2".muttrc<enter><change-folder>!<enter>;<check-stats>'\'' \"zu "$2" wechseln\""
 		}
 	' "$tempfile" >>"$muttrc"
 }
@@ -411,7 +411,7 @@ while getopts "rfpXlhodTYD:y:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	T) setact toggle ;;
 	h) setact info ;;
 	\?)
-		echo "See \`$(basename $0) -h\` for possible options and help."
+		echo "Siehe \`$(basename $0) -h\` für mögliche Optionen und Hilfe."
 		exit 1
 		;;
 	esac done
@@ -423,7 +423,7 @@ list) list ;;
 add) checkbasics && askinfo && getboxes && getprofiles && finalize ;;
 delete) delete ;;
 sync)
-	echo "\`mw -y\` and \`mw -Y\` are now deprecated and will be removed in a future update. Please switch to using \`mailsync\`."
+	echo "\`mw -y\` und \`mw -Y\` sind jetzt veraltet und werden in einem zukünftigen Update entfernt. Bitte wechseln Sie zur Verwendung von \`mailsync\`."
 	mailsync $fulladdr
 	;;
 toggle) togglecron ;;
