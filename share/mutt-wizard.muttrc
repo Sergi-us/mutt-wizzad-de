@@ -98,6 +98,41 @@ macro index,pager Ca ";<copy-message>=Archive<enter>" "E-Mail ins Archiv kopiere
 macro index \eg "<enter-command>unset wait_key<enter><shell-escape>gpg --list-secret-keys; printf 'E-Mail-ID des Benutzers zum Veröffentlichen eingeben: '; read eID; printf 'Fingerabdruck des GPG-Schlüssels zum Veröffentlichen eingeben: '; read eFGPT; $prefix/libexec/gpg-wks-client --create \\\$eFGPT \\\$eID | msmtp --read-envelope-from --read-recipients -a $fulladdr<enter>"  "GPG-Schlüssel beim WKS-Anbieter veröffentlichen"
 macro index \eh "<pipe-message>$prefix/libexec/gpg-wks-client --receive | msmtp --read-envelope-from --read-recipients -a $fulladdr<enter>" "GPG-Veröffentlichung bestätigen"
 
+# GPG/PGP-Konfiguration - Standard-Befehle für Verschlüsselung und Signierung
+set crypt_use_gpgme = no
+set crypt_use_pka = no
+set pgp_check_gpg_decrypt_status_fd
+set pgp_use_gpg_agent = yes
+set pgp_self_encrypt = yes
+set pgp_timeout = 3600
+
+# GPG-Befehle
+set pgp_decode_command="gpg --status-fd=2 %?p?--passphrase-fd 0? --no-verbose --quiet --batch --output - %f"
+set pgp_verify_command="gpg --status-fd=2 --no-verbose --quiet --batch --output - --verify %s %f"
+set pgp_decrypt_command="gpg --status-fd=2 %?p?--passphrase-fd 0? --no-verbose --quiet --batch --output - %f"
+set pgp_sign_command="gpg --no-verbose --batch --quiet --output - %?p?--passphrase-fd 0? --armor --detach-sign --textmode %?a?-u %a? %f"
+set pgp_clearsign_command="gpg --no-verbose --batch --quiet --output - %?p?--passphrase-fd 0? --armor --textmode --clearsign %?a?-u %a? %f"
+set pgp_encrypt_only_command="/usr/lib/neomutt/pgpewrap gpg --batch --quiet --no-verbose --output - --encrypt --textmode --armor --always-trust -- -r %r -- %f"
+set pgp_encrypt_sign_command="/usr/lib/neomutt/pgpewrap gpg %?p?--passphrase-fd 0? --batch --quiet --no-verbose --textmode --output - --encrypt --sign %?a?-u %a? --armor --always-trust -- -r %r -- %f"
+set pgp_import_command="gpg --no-verbose --import %f"
+set pgp_export_command="gpg --no-verbose --export --armor %r"
+set pgp_verify_key_command="gpg --verbose --batch --fingerprint --check-sigs %r"
+set pgp_list_pubring_command="gpg --no-verbose --batch --quiet --with-colons --with-fingerprint --with-fingerprint --list-keys %r"
+set pgp_list_secring_command="gpg --no-verbose --batch --quiet --with-colons --with-fingerprint --with-fingerprint --list-secret-keys %r"
+set pgp_good_sign="^\\[GNUPG:\\] GOODSIG"
+set pgp_check_exit = yes
+
+# Automatische Schlüsselsuche aktivieren
+set pgp_auto_decode = yes
+set crypt_auto_pgp = yes
+
+# Schlüssel automatisch von Keyserver holen wenn nicht vorhanden
+# WICHTIG: Funktioniert nur wenn Schlüssel auf Keyserver verfügbar ist
+set pgp_get_keys_command="gpg --quiet --batch --auto-key-locate wkd,keyserver --keyserver keys.openpgp.org --locate-keys %r"
+
+# Macro zum manuellen Schlüsselholen (Taste K in Compose-Ansicht)
+macro compose K "<shell-escape>printf 'E-Mail-Adresse: '; read keyid; gpg --keyserver keys.openpgp.org --recv-keys \$keyid || gpg --locate-keys \$keyid; printf 'Drücke Enter...'; read dummy<enter>" "Öffentlichen Schlüssel vom Keyserver holen"
+
 macro index,pager a "<enter-command>set my_pipe_decode=\$pipe_decode pipe_decode<return><pipe-message>abook --add-email<return><enter-command>set pipe_decode=\$my_pipe_decode; unset my_pipe_decode<return>" "Absenderadresse zu abook hinzufügen"
 macro index \Cr "T~U<enter><tag-prefix><clear-flag>N<untag-pattern>.<enter>" "Alle Nachrichten als gelesen markieren"
 macro index O "<shell-escape>mailsync<enter>" "mailsync ausführen um alle E-Mails zu synchronisieren"

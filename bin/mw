@@ -274,6 +274,186 @@ else
 	action="$1"
 fi; }
 
+discover_pgp_key() {
+	# Versucht automatisch einen PGP-Schlüssel für die E-Mail-Adresse zu finden
+	local email="$1"
+	local discovered_fpr
+	
+	discovered_fpr="$(gpg --list-secret-keys --with-colons "$email" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+	
+	if [ -n "$discovered_fpr" ]; then
+		echo "$discovered_fpr"
+		return 0
+	else
+		return 1
+	fi
+}
+
+validate_pgp_key() {
+	# Validiert einen PGP-Fingerprint und zeigt Key-Informationen an
+	local fpr="$1"
+	
+	# Entferne Leerzeichen aus Fingerprint
+	fpr="$(echo "$fpr" | tr -d ' ')"
+	
+	# Prüfe ob Fingerprint 40 Zeichen lang ist
+	if [ "${#fpr}" -ne 40 ]; then
+		echo "Fehler: Fingerprint muss genau 40 Zeichen lang sein (aktuell: ${#fpr})."
+		return 1
+	fi
+	
+	# Prüfe ob der Schlüssel existiert
+	if ! gpg --list-secret-keys "$fpr" >/dev/null 2>&1; then
+		echo "Fehler: Kein geheimer Schlüssel mit Fingerprint '$fpr' gefunden."
+		echo "Verfügbare Schlüssel:"
+		gpg --list-secret-keys --keyid-format=long
+		return 1
+	fi
+	
+	# Zeige Key-Informationen
+	echo ""
+	echo "=== Gefundener PGP-Schlüssel ==="
+	gpg --list-secret-keys --keyid-format=long "$fpr" | grep -E "^(sec|uid|ssb)" | head -5
+	echo "================================="
+	echo ""
+	
+	# Prüfe ob Schlüssel abgelaufen ist
+	local expiry
+	expiry="$(gpg --list-secret-keys --with-colons "$fpr" 2>/dev/null | awk -F: '/^sec:/ {print $7; exit}')"
+	if [ -n "$expiry" ] && [ "$expiry" != "0" ]; then
+		local now
+		now="$(date +%s)"
+		if [ "$expiry" -lt "$now" ]; then
+			echo "⚠️  WARNUNG: Dieser Schlüssel ist abgelaufen!"
+			echo ""
+		fi
+	fi
+	
+	return 0
+}
+
+configure_pgp() {
+	# Konfiguriert PGP-Verschlüsselung für einen Account
+	local email="$1"
+	local pgp_fpr="$2"
+	local account_muttrc="$accdir/$email.muttrc"
+	
+	# Prüfe ob Account existiert
+	if [ ! -f "$account_muttrc" ]; then
+		echo "Fehler: Account '$email' nicht gefunden."
+		echo "Verfügbare Accounts:"
+		list
+		return 1
+	fi
+	
+	# Entferne alte PGP-Konfiguration falls vorhanden
+	sed -i '/^# === PGP-Konfiguration ===/,/^# === Ende PGP-Konfiguration ===/d' "$account_muttrc" 2>/dev/null
+	
+	# Füge neue PGP-Konfiguration hinzu
+	cat >> "$account_muttrc" <<EOF
+
+# === PGP-Konfiguration ===
+# Schlüssel-Fingerprint: $pgp_fpr
+set pgp_default_key = "$pgp_fpr"
+set crypt_auto_sign = yes
+# Optional (auskommentiert - per Keybinding 'p' in Compose-Ansicht aktivierbar):
+#set crypt_opportunistic_encrypt = yes
+#set pgp_self_encrypt = yes
+# === Ende PGP-Konfiguration ===
+EOF
+	
+	echo ""
+	echo "✅ PGP-Verschlüsselung erfolgreich für '$email' konfiguriert!"
+	echo ""
+	echo "📝 Einstellungen:"
+	echo "   - Automatisches Signieren: Aktiv"
+	echo "   - Automatisches Verschlüsseln: Manuell (Taste 'p' beim Verfassen)"
+	echo ""
+	echo "💡 Tipp: In der Compose-Ansicht kannst du mit 'p' die Verschlüsselung aktivieren."
+	echo ""
+	
+	return 0
+}
+
+ask_pgp_config() {
+	# Fragt interaktiv nach PGP-Konfiguration für einen Account
+	local email="$1"
+	local discovered_fpr
+	local user_fpr
+	
+	echo ""
+	echo "=== PGP-Verschlüsselung einrichten für: $email ==="
+	echo ""
+	
+	# Versuche automatische Erkennung
+	if discovered_fpr="$(discover_pgp_key "$email")"; then
+		echo "🔍 Automatisch gefundener Schlüssel:"
+		validate_pgp_key "$discovered_fpr"
+		echo ""
+		printf "Diesen Schlüssel verwenden? [Y/n] "
+		read -r confirm
+		case "$confirm" in
+			[nN]|[nN][oO])
+				echo "Bitte geben Sie den vollständigen 40-stelligen Fingerprint manuell ein:"
+				read -r user_fpr
+				;;
+			*)
+				user_fpr="$discovered_fpr"
+				;;
+		esac
+	else
+		echo "ℹ️  Kein Schlüssel automatisch gefunden."
+		echo ""
+		echo "Verfügbare geheime Schlüssel:"
+		gpg --list-secret-keys --keyid-format=long
+		echo ""
+		echo "Bitte geben Sie den vollständigen 40-stelligen Fingerprint ein:"
+		echo "(Leerzeichen werden automatisch entfernt)"
+		read -r user_fpr
+	fi
+	
+	# Entferne Leerzeichen
+	user_fpr="$(echo "$user_fpr" | tr -d ' ')"
+	
+	# Validiere Fingerprint
+	if ! validate_pgp_key "$user_fpr"; then
+		return 1
+	fi
+	
+	# Prüfe ob selber Schlüssel wie für pass verwendet wird (nur Hinweis)
+	local pass_gpg_id
+	if [ -f "$PASSWORD_STORE_DIR/.gpg-id" ]; then
+		pass_gpg_id="$(cat "$PASSWORD_STORE_DIR/.gpg-id" 2>/dev/null)"
+		# Hole Fingerprint vom pass-Schlüssel
+		local pass_fpr
+		pass_fpr="$(gpg --list-keys --with-colons "$pass_gpg_id" 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+		
+		if [ "$user_fpr" = "$pass_fpr" ]; then
+			echo ""
+			echo "ℹ️  HINWEIS: Sie verwenden denselben Schlüssel wie für pass (Passwort-Store)."
+			echo "   Dies ist funktional, aber Best Practice ist die Trennung:"
+			echo "   - Einen Schlüssel für Passwörter (pass)"
+			echo "   - Einen separaten Schlüssel für E-Mail-Verschlüsselung"
+			echo ""
+			printf "Trotzdem fortfahren? [y/N] "
+			read -r confirm
+			case "$confirm" in
+				[yY]|[yY][eE][sS])
+					;;
+				*)
+					echo "Abgebrochen."
+					return 1
+					;;
+			esac
+		fi
+	fi
+	
+	# Konfiguriere PGP
+	configure_pgp "$email" "$user_fpr"
+	
+	return 0
+}
+
 mwinfo() {
 	cat <<EOF
 mw: mutt-wizard - E-Mail-Konten automatisch für mutt konfigurieren,
@@ -284,6 +464,7 @@ Hauptaktionen:
   -l			Konfigurierte E-Mail-Adressen auflisten
   -d			Bereits hinzugefügte Adresse entfernen
   -D ihre@email.com	Konto ohne Bestätigung erzwungen entfernen
+  -g ihre@email.com	PGP-Verschlüsselung für ein Konto aktivieren
   -t Zahl		Automatische Mailsynchronisation alle <Zahl> Minuten umschalten
   -T			Automatische Mailsynchronisation umschalten
   -r			Kontonummern neu ordnen
@@ -333,7 +514,7 @@ reorder() {
 	' "$tempfile" >>"$muttrc"
 }
 
-while getopts "rfpXlhodTYD:y:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
+while getopts "rfpXlhodTYD:y:g:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	l) setact list ;;
 	r) setact reorder ;;
 	d) setact delete ;;
@@ -346,6 +527,10 @@ while getopts "rfpXlhodTYD:y:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 		fulladdr="$OPTARG"
 		;;
 	Y) setact sync ;;
+	g)
+		setact enablepgp
+		fulladdr="$OPTARG"
+		;;
 	a)
 		setact add
 		fulladdr="$OPTARG"
@@ -426,6 +611,7 @@ sync)
 	echo "\`mw -y\` und \`mw -Y\` sind jetzt veraltet und werden in einem zukünftigen Update entfernt. Bitte wechseln Sie zur Verwendung von \`mailsync\`."
 	mailsync $fulladdr
 	;;
+enablepgp) ask_pgp_config "$fulladdr" ;;
 toggle) togglecron ;;
 reorder) reorder ;;
 info)
