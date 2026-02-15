@@ -184,11 +184,12 @@ gpg --full-generate-key
 # Wähle:
 # - RSA (sign and encrypt)
 # - 4096 Bit
-# - Gültigkeitsdauer (z.B. 2 Jahre)
-# - Name und E-Mail-Adresse deines Kontos
+# - Ihr Name ("Vorname Nachname"): Unwichtig/Unnötig
+# - Email-Adresse: hier die Mailadresse eintragen (wichtig damit der Schlüssel automatisch gefunden wird)
+# - Gültigkeitsdauer und andere angaben nach belieben eingeben oder weglassen
 ```
 
-2. **Fingerprint notieren**
+2. **Fingerprint notieren (unnötig, sollte automatisch finden) **
 
 ```bash
 # Liste alle Schlüssel mit Fingerprints
