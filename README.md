@@ -52,8 +52,6 @@ sudo pacman -S goimapnotify lynx notmuch abook urlview cronie mpop
 sudo apt install goimapnotify lynx notmuch abook urlview cron mpop
 ```
 
-**Hinweis:** Auf langsamen Release-Distributionen (Ubuntu, Debian, Mint) kann eine veraltete neomutt-Version Probleme verursachen. Entweder manuell die neueste Version installieren oder fehlerhafte Zeilen in `/usr/share/mutt-wizard/mutt-wizard.muttrc` entfernen.
-
 ### Installation von mutt-wizard
 
 ```bash
@@ -62,18 +60,11 @@ cd mutt-wizzard-de
 sudo make install
 ```
 
-**Arch Linux AUR:**
-```bash
-# Stable Release
-yay -S mutt-wizard
-
-# Git Master Branch
-yay -S mutt-wizard-git
-```
+**Arch Linux AUR: (in vorbereitung)**
 
 ## 🚀 Schnellstart
 
-### 1. GPG-Schlüssel einrichten
+### 1. GPG-Schlüssel für 'pass' (Linux Passwortmanager) einrichten 
 
 Falls noch nicht vorhanden:
 ```bash
@@ -83,10 +74,10 @@ gpg --full-generate-key
 ### 2. Pass initialisieren
 
 ```bash
-pass init deine-gpg-email@example.com
+pass init "den zuvor erstelleten Pass-PGP Schlüssel"
 ```
 
-### 3. E-Mail-Konto hinzufügen
+### 3. E-Mail-Konto hinzufügen (mw steht für Mutt-Wizzard)
 
 ```bash
 mw -a deine@email.com
@@ -108,7 +99,7 @@ neomutt
 
 ## 📖 Verwendung
 
-### Grundbefehle
+### Grundbefehle (einfach 'mw' im Terminal eintippen, dann kommt die Übersicht)
 
 | Befehl                           | Beschreibung                               |
 |----------------------------------|--------------------------------------------|
@@ -497,6 +488,16 @@ neomutt
 
 **⚠️ Hinweis:** Edward/Adele-Bots haben oft abgelaufene Schlüssel.
 
+### Testmai an mich
+
+Du kannst mir einfach auch ne mail zusenden die Signiert und verschlüsselt ist.
+Jede mail die ich bekomme mit dem Betreff "PGP-Verschlüsselungs test" beantworte
+ich und du kannst meinen öffentlichen Key importiren und an mich eine
+Verschlüsselte mail schicken. Wenn du schon meine Anleitung so weit gelesen
+hast... 
+
+mailto:sergius@posteo.de
+
 ### Troubleshooting
 
 #### "No valid OpenPGP data found"
@@ -562,7 +563,9 @@ gpgconf --kill gpg-agent
 2. ✅ **Backup erstellen**: Privaten Schlüssel sicher aufbewahren
    ```bash
    gpg --armor --export-secret-keys FINGERPRINT > backup-private.asc
-   # Auf USB-Stick, verschlüsselte Cloud, etc.
+   # oder alle schlüssel
+   gpg --armor --export-secret-keys > backup-private.asc
+   # Auf USB-Stick, verschlüsselte Cloud... Ich lege die Schlüssel in einem Tomb ab
    ```
 3. ✅ **Revocation Certificate**: Sofort nach Erstellung
    ```bash
@@ -582,16 +585,12 @@ gpgconf --kill gpg-agent
 
 ## 🔧 Erweiterte Konfiguration
 
-### Push-Benachrichtigungen aktivieren
+### Push-Benachrichtigungen aktivieren (experimentel)
 
 Für sofortige Benachrichtigungen bei neuen E-Mails:
+https://gitlab.com/shackra/goimapnotify
+... weitere Tools für instand Mailbenachrichtigungen bitte an mich senden
 
-```bash
-systemctl --user enable goimapnotify@deine@email.com.service
-systemctl --user start goimapnotify@deine@email.com.service
-```
-
-**Hinweis:** Ersetze `deine@email.com` mit deiner tatsächlichen E-Mail-Adresse (inkl. `@`-Zeichen).
 
 ### Automatische Synchronisation
 
@@ -607,6 +606,13 @@ mw -T  # Toggle schaltet auch aus
 ```
 
 Dies richtet einen Cronjob ein, der `mailsync` regelmäßig ausführt.
+
+```
+# meine Zeiteinstellung für cronjob ist:
+crontab -e
+0,15,30,45 6-22 * * * /usr/local/bin/mailsync
+# alle 15 min von 6-22 Uhr
+```
 
 ### Notmuch für E-Mail-Suche
 
@@ -677,7 +683,7 @@ pass edit deine@email.de
 
 ### Passwort-Präfix verwenden
 
-Falls du mehrere Pass-Archive nutzt:
+Falls du Pass-Unterverzeichnisse nutzt:
 
 ```bash
 mw -a email@example.com -P "arbeit/"
@@ -735,9 +741,12 @@ In `~/.config/mutt/muttrc` kannst du beliebige Einstellungen hinzufügen:
 ```muttrc
 # Am Ende der Datei eigene Settings:
 set editor = "nvim"
-set date_format = "%d.%m.%Y %H:%M"
-color index brightblue default "~N"  # Neue Mails blau
+set date_format = "%Y.%m.%d %H:%M"		# Deutsches Datumformat
+color index brightblue default "~N"		# Neue Mails blau
 ```
+
+TODO Das Teutsche Datumsvormat soltle von mir vorkonfiguriert werden...
+TODO Auch die Farben gehören überarbeitet... Hellwall oder Vim-Themes???
 
 **Wichtig:** Die von mutt-wizard generierten Zeilen nicht löschen (besonders `source`-Befehle).
 
@@ -746,7 +755,7 @@ color index brightblue default "~N"  # Neue Mails blau
 Falls dein E-Mail-Provider nicht automatisch erkannt wird:
 
 ```bash
-sudo nano /usr/local/share/mutt-wizard/domains.csv
+sudo nvim /usr/local/share/mutt-wizard/domains.csv
 ```
 
 Format: `domain,imap-server,imap-port,smtp-server,smtp-port`
@@ -768,7 +777,7 @@ Für Subdomains Wildcards verwenden:
 Für Konto-spezifische Anpassungen:
 
 ```bash
-nano ~/.config/mutt/accounts/deine@email.com.muttrc
+nvim ~/.config/mutt/accounts/deine@email.com.muttrc
 ```
 
 Diese Datei wird beim Wechsel zum Konto geladen.
@@ -799,7 +808,6 @@ Diese deutsche Version basiert auf Luke Smith's [mutt-wizard](https://github.com
 ### Bug Reports & Feature Requests
 
 - **[Codeberg Issues](https://codeberg.org/Sergius/mutt-wizzard-de/issues)** - Für die deutsche Version
-- **[GitHub Issues](https://github.com/LukeSmithxyz/mutt-wizard/issues)** - Für das Original
 
 ### Pull Requests
 
@@ -826,9 +834,11 @@ Besonders willkommen:
 
 ## 📜 Lizenz
 
-mutt-wizard ist freie/libre Software unter der **GPLv3 Lizenz**.
+mutt-wizard-de ist freie/libre Software unter der **GPLv3 Lizenz**.
 
 Siehe [LICENSE](LICENSE) Datei für Details.
+
+**Der Code ist hauptsächlich von Luke Smith, muss seine Lizenzwahl übernehmen**
 
 ## 🙏 Credits
 
