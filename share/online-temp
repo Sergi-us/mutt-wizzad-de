@@ -1,4 +1,4 @@
 set imap_user = "$login"
-set imap_pass = "`pass $passprefix$fulladdr`"
+set imap_pass = "`pass $passprefix$fulladdr | head -1`"
 set ssl_starttls = yes
 set ssl_force_tls = yes

@@ -5,4 +5,4 @@ host $imap
 port $iport
 timeout 10
 delivery maildir $maildir/$fulladdr/INBOX
-passwordeval pass $passprefix$fulladdr
+passwordeval pass $passprefix$fulladdr | head -1

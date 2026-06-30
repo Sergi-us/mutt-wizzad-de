@@ -7,7 +7,7 @@
     },
     "username": "$login",
     "password": "",
-    "passwordCmd": "pass $passprefix$fulladdr",
+    "passwordCmd": "pass $passprefix$fulladdr | head -1",
     "onNewMail": "mailsync",
     "onNewMailPost": "",
     "boxes": [ "INBOX" ]
