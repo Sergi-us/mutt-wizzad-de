@@ -160,6 +160,7 @@ delete() {
 	sed -ibu "/account $fulladdr$/,/^\(\s*$\|account\)/d" "$mpoprc" 2>/dev/null
 	rm -f "$mpoprc"bu
 	pass rm -f "$passprefix$fulladdr" >/dev/null 2>&1
+	rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/bogofilter/${fulladdr}" 2>/dev/null
 	[ -n "${purge+x}" ] && safename="$(echo $fulladdr | sed 's/@/_/g')" && rm -rf "${cachedir:?}/${safename:?}" "${maildir:?}/${fulladdr:?}"
 }
 
@@ -456,6 +457,120 @@ ask_pgp_config() {
 	return 0
 }
 
+configure_spam() {
+	# Konfiguriert bogofilter SPAM-Filterung für einen Account
+	local email="$1"
+	local account_muttrc="$accdir/$email.muttrc"
+	local bogodir="${XDG_DATA_HOME:-$HOME/.local/share}/bogofilter/$email"
+	local spamdir="$maildir/$email/Spam"
+
+	# Prüfe ob Account existiert
+	if [ ! -f "$account_muttrc" ]; then
+		echo "Fehler: Account '$email' nicht gefunden."
+		echo "Verfügbare Accounts:"
+		list
+		return 1
+	fi
+
+	# Prüfe ob bogofilter installiert ist
+	if ! command -V bogofilter >/dev/null 2>&1; then
+		echo "Fehler: bogofilter ist nicht installiert."
+		echo "Bitte installieren Sie bogofilter zuerst:"
+		echo "  Arch Linux: sudo pacman -S bogofilter"
+		echo "  Debian/Ubuntu: sudo apt install bogofilter"
+		return 1
+	fi
+
+	# Erstelle bogofilter-Datenbankverzeichnis
+	mkdir -p "$bogodir"
+
+	# Erstelle Spam-Maildir
+	mkdir -p "$spamdir/cur" "$spamdir/new" "$spamdir/tmp"
+
+	# Entferne alte SPAM-Konfiguration falls vorhanden
+	sed -i '/^# === SPAM-Konfiguration ===/,/^# === Ende SPAM-Konfiguration ===/d' "$account_muttrc" 2>/dev/null
+
+	# Füge neue SPAM-Konfiguration hinzu
+	cat >> "$account_muttrc" <<EOF
+
+# === SPAM-Konfiguration ===
+# bogofilter SPAM-Filterung für $email
+
+# Shift+d (D) = Als Ham lernen -> ab in den Trash (außer im Spam-Ordner)
+macro index D "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -n<enter><save-message>+Trash<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Ham lernen und in den Trash"
+
+# Shift+x (X) = Als Spam lernen -> ab in den neuen Spam-Ordner
+macro index X "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -s<enter><save-message>+Spam<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Spam lernen und in den Spam-Ordner"
+
+# F5 = Das Skript triggern, das mbsync und den Filter ausführt
+macro index <F5> "<sync-mailbox><shell-escape>~/.local/bin/mail-filter-sync<enter><check-stats>" "Mails syncen und filtern"
+
+# F6 = False Positive: Als Ham lernen und in INBOX verschieben
+macro index <F6> "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -n<enter><save-message>+INBOX<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Ham lernen und in INBOX verschieben"
+
+# Im Spam-Ordner: D = normales Löschen (nicht als Ham trainieren)
+folder-hook =Spam 'macro index D "<delete-message>" "Mail löschen"'
+
+# gS = Zum Spam-Ordner wechseln
+macro index,pager gS "<change-folder>=Spam<enter>" "Zum Spam-Ordner wechseln"
+
+# Spam-Ordner zur Sidebar hinzufügen
+mailboxes +=Spam
+# === Ende SPAM-Konfiguration ===
+EOF
+
+	# Installiere mail-filter-sync nach ~/.local/bin/
+	local localbin="${HOME}/.local/bin"
+	mkdir -p "$localbin"
+	cp -f "$muttshare/../../../bin/mail-filter-sync" "$localbin/mail-filter-sync" 2>/dev/null || \
+		cp -f "$(dirname "$0")/mail-filter-sync" "$localbin/mail-filter-sync" 2>/dev/null || true
+	chmod 755 "$localbin/mail-filter-sync" 2>/dev/null || true
+
+	echo ""
+	echo "✅ SPAM-Filterung erfolgreich für '$email' konfiguriert!"
+	echo ""
+	echo "📝 Einstellungen:"
+	echo "   - bogofilter-Datenbank: $bogodir"
+	echo "   - Spam-Ordner: $spamdir"
+	echo "   - D = Als Ham lernen + Trash"
+	echo "   - X = Als Spam lernen + Spam"
+	echo "   - F5 = Sync + Filter"
+	echo "   - gS = Spam-Ordner öffnen"
+	echo ""
+	echo "💡 Tipp: Trainiere bogofilter indem du Mails mit D (Ham) oder X (Spam) markierst."
+	echo ""
+
+	return 0
+}
+
+ask_spam_config() {
+	# Fragt interaktiv nach SPAM-Konfiguration für einen Account
+	local email="$1"
+
+	echo ""
+	echo "=== SPAM-Filterung einrichten für: $email ==="
+	echo ""
+	echo "Dies wird:"
+	echo "  1. bogofilter-Datenbank in ~/.local/share/bogofilter/$email/ erstellen"
+	echo "  2. Spam-Ordner in ~/.local/share/mail/$email/Spam/ erstellen"
+	echo "  3. SPAM-Makros zur Account-Konfiguration hinzufügen"
+	echo "  4. mail-filter-sync nach ~/.local/bin/ installieren"
+	echo ""
+	printf "Fortfahren? [Y/n] "
+	read -r confirm
+	case "$confirm" in
+		[nN]|[nN][oO])
+			echo "Abgebrochen."
+			return 1
+			;;
+	esac
+
+	# Konfiguriere SPAM
+	configure_spam "$email"
+
+	return 0
+}
+
 mwinfo() {
 	cat <<EOF
 mw: mutt-wizard - E-Mail-Konten automatisch für mutt konfigurieren,
@@ -467,6 +582,7 @@ Hauptaktionen:
   -d			Bereits hinzugefügte Adresse entfernen
   -D ihre@email.com	Konto ohne Bestätigung erzwungen entfernen
   -g ihre@email.com	PGP-Verschlüsselung für ein Konto aktivieren
+  -b ihre@email.com	SPAM-Filterung (bogofilter) für ein Konto aktivieren
   -t Zahl		Automatische Mailsynchronisation alle <Zahl> Minuten umschalten
   -T			Automatische Mailsynchronisation umschalten
   -r			Kontonummern neu ordnen
@@ -516,7 +632,7 @@ reorder() {
 	' "$tempfile" >>"$muttrc"
 }
 
-while getopts "rfpXlhodTYD:y:g:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
+while getopts "rfpXlhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	l) setact list ;;
 	r) setact reorder ;;
 	d) setact delete ;;
@@ -531,6 +647,10 @@ while getopts "rfpXlhodTYD:y:g:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	Y) setact sync ;;
 	g)
 		setact enablepgp
+		fulladdr="$OPTARG"
+		;;
+	b)
+		setact enablespam
 		fulladdr="$OPTARG"
 		;;
 	a)
@@ -614,6 +734,7 @@ sync)
 	mailsync $fulladdr
 	;;
 enablepgp) ask_pgp_config "$fulladdr" ;;
+enablespam) ask_spam_config "$fulladdr" ;;
 toggle) togglecron ;;
 reorder) reorder ;;
 info)

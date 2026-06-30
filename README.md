@@ -17,6 +17,7 @@ mutt-wizard (`mw`) richtet automatisch ein:
 - ✅ **msmtp** - SMTP zum Versenden von E-Mails
 - ✅ **pass** - Verschlüsselte Passwortspeicherung via GPG
 - ✅ **PGP/GPG** - E-Mail-Verschlüsselung und -Signierung
+- ✅ **bogofilter** - Lokale SPAM-Filterung (optional)
 - ✅ **mailsync** - Automatische Synchronisation mit Benachrichtigungen
 - ✅ **Mehrere Konten** - Bis zu 9 E-Mail-Konten gleichzeitig
 - ✅ **TLSType** - umgestellt von SSLType
@@ -46,10 +47,10 @@ sudo apt install neomutt isync msmtp pass curl ca-certificates gettext-base
 **Optional (empfohlen):**
 ```bash
 # Arch Linux
-sudo pacman -S goimapnotify lynx notmuch abook urlview cronie mpop
+sudo pacman -S goimapnotify lynx notmuch abook urlview cronie mpop bogofilter
 
 # Debian/Ubuntu  
-sudo apt install goimapnotify lynx notmuch abook urlview cron mpop
+sudo apt install goimapnotify lynx notmuch abook urlview cron mpop bogofilter
 ```
 
 ### Installation von mutt-wizard
@@ -108,6 +109,7 @@ neomutt
 | `mw -d`                          | Konto löschen (interaktiv)                 |
 | `mw -D email@example.com`        | Konto ohne Bestätigung löschen             |
 | `mw -g email@example.com`        | PGP-Verschlüsselung für Konto aktivieren   |
+| `mw -b email@example.com`        | SPAM-Filterung (bogofilter) für Konto aktivieren |
 | `mw -t 30`                       | Auto-Sync alle 30 Minuten aktivieren       |
 | `mw -T`                          | Auto-Sync mit Standard (10 Min) aktivieren |
 | `mw -r`                          | Konto-Nummern neu ordnen                   |
@@ -157,6 +159,8 @@ Die wichtigsten Befehle in Neomutt:
 | <kbd>Ctrl+f</kbd>                                                         | Notmuch-Suche                                       |
 | <kbd>p</kbd>                                                              | E-Mail verschlüsseln/signieren (in Compose-Ansicht) |
 | <kbd>K</kbd>                                                              | Öffentlichen Schlüssel holen (in Compose-Ansicht)   |
+| <kbd>F5</kbd>                                                             | Mails syncen und bogofilter-Filter ausführen        |
+| <kbd>F6</kbd>                                                             | False Positive: Als Ham lernen + in INBOX verschieben |
 
 ## 🔐 PGP-Verschlüsselung einrichten
 
@@ -583,6 +587,176 @@ gpgconf --kill gpg-agent
 - [Neomutt PGP Guide](https://neomutt.org/guide/security.html)
 - [OpenPGP Best Practices](https://riseup.net/en/security/message-security/openpgp/best-practices)
 
+## 🛡️ SPAM-Filterung mit bogofilter
+
+mutt-wizard unterstützt lokale SPAM-Filterung mit [bogofilter](https://bogofilter.sourceforge.io/), einem Bayes'schen Spam-Filter.
+
+### Voraussetzungen
+
+1. **bogofilter installieren**
+
+```bash
+# Arch Linux
+sudo pacman -S bogofilter
+# Wähle z.B. bogofilter-lmdb (Option 3)
+
+# Debian/Ubuntu
+sudo apt install bogofilter
+```
+
+2. **Version prüfen**
+```bash
+bogofilter -V
+```
+
+### SPAM-Filterung für Account aktivieren
+
+```bash
+# SPAM-Filterung einrichten
+mw -b deine@email.com
+```
+
+**Was passiert:**
+1. Erstellt bogofilter-Datenbank in `~/.local/share/bogofilter/deine@email.com/`
+2. Erstellt Spam-Ordner in `~/.local/share/mail/deine@email.com/Spam/`
+3. Fügt SPAM-Makros zur Account-Konfiguration hinzu
+4. Installiert `mail-filter-sync` nach `~/.local/bin/`
+
+### Aktivierte Tastenkombinationen
+
+Nach `mw -b` sind folgende Tastenkombinationen aktiv:
+
+| Taste | Funktion | Beschreibung |
+|-------|----------|--------------|
+| `D` (Shift+d) | Als Ham lernen | Trainiert bogofilter dass die Mail KEIN Spam ist, verschiebt in Trash (außer im Spam-Ordner) |
+| `X` (Shift+x) | Als Spam lernen | Trainiert bogofilter dass die Mail Spam ist, verschiebt in Spam-Ordner |
+| `<F5>` | Sync + Filter | Synchronisiert Mails und filtert neue Mails durch bogofilter |
+| `<F6>` | False Positive | Als Ham lernen und in INBOX verschieben (von überall) |
+| `gS` | Spam-Ordner | Wechselt zum Spam-Ordner |
+
+### Workflow: SPAM-Training
+
+**bogofilter lernt durch deine Entscheidungen:**
+
+1. **Spam markieren (X):**
+   - Öffne eine Spam-Mail im Index
+   - Drücke `X` (Shift+x)
+   - bogofilter lernt: "Diese Mail ist Spam"
+   - Mail wird in den Spam-Ordner verschoben
+
+2. **Ham markieren (D):**
+   - Öffne eine Mail die fälschlich als Spam markiert wurde (False Positive)
+   - Drücke `D` (Shift+d)
+   - bogofilter lernt: "Diese Mail ist KEIN Spam"
+   - Mail wird in den Trash verschoben
+   - **Hinweis:** Im Spam-Ordner löscht `D` normal (kein Training)
+
+3. **False Positives korrigieren (F6):**
+   - Öffne eine fälschlich als Spam erkannte Mail (im Spam-Ordner oder Trash)
+   - Drücke `<F6>`
+   - bogofilter lernt: "Diese Mail ist KEIN Spam"
+   - Mail wird automatisch in die INBOX verschoben
+   - Funktioniert von überall (Spam, Trash, etc.)
+
+4. **Automatisches Filtern (F5):**
+   - Drücke `F5` im Index
+   - `mailsync` synchronisiert alle Mails
+   - `mail-filter-sync` klassifiziert neue Mails
+   - Spam wird automatisch in den Spam-Ordner verschoben
+
+### Automatisches Filtern
+
+Das `mail-filter-sync` Skript:
+- Iteriert durch alle Accounts mit bogofilter-Datenbank
+- Synchronisiert Mails mit `mbsync`
+- Klassifiziert neue Mails in `INBOX/new/` mit bogofilter
+- Verschiebt erkannte Spam-Mails nach `Spam/`
+- Führt `notmuch new` aus (falls installiert)
+
+**Manuell ausführen:**
+```bash
+~/.local/bin/mail-filter-sync
+```
+
+**Mit Cronjob automatisieren:**
+```bash
+# Alle 15 Minuten filtern
+crontab -e
+*/15 * * * * ~/.local/bin/mail-filter-sync
+```
+
+### bogofilter-Datenbank
+
+Die bogofilter-Datenbank wird pro Account in `~/.local/share/bogofilter/` gespeichert:
+
+```
+~/.local/share/bogofilter/
+├── email1@example.com/    # Datenbank für Account 1
+│   ├── wordlist.db        # Bayes'sche Wortliste
+│   └── ...
+└── email2@example.com/    # Datenbank für Account 2
+    └── ...
+```
+
+**Wichtig:** Je mehr Mails du trainierst, desto besser wird die Erkennung!
+
+### Troubleshooting
+
+#### "bogofilter nicht installiert"
+
+**Lösung:**
+```bash
+# Arch Linux
+sudo pacman -S bogofilter
+
+# Debian/Ubuntu
+sudo apt install bogofilter
+```
+
+#### Spam wird nicht erkannt
+
+**Problem:** bogofilter hat noch nicht genug Trainingsdaten
+
+**Lösung:**
+- Trainiere bogofilter aktiv: Markiere Spam mit `X`, Ham mit `D`
+- Nach 50-100 trainierten Mails wird die Erkennung deutlich besser
+
+#### False Positives (Ham als Spam markiert)
+
+**Lösung:**
+1. Öffne die Mail im Spam-Ordner (oder Trash)
+2. Drücke `<F6>` um sie als Ham zu trainieren und in die INBOX zu verschieben
+3. bogofilter lernt dass diese Mail KEIN Spam ist
+4. Mail wird automatisch in die INBOX verschoben
+
+**Alternativ:**
+- Im Spam-Ordner: `D` löscht die Mail normal (kein Training)
+- Manuell: Mail mit `M` (Move) in INBOX verschieben
+
+#### mail-filter-sync findet keine Accounts
+
+**Problem:** Keine bogofilter-Datenbanken vorhanden
+
+**Lösung:**
+```bash
+# Prüfe ob Datenbanken existieren
+ls ~/.local/share/bogofilter/
+
+# Falls leer: SPAM-Filterung für Account aktivieren
+mw -b deine@email.com
+```
+
+### Best Practices
+
+1. ✅ **Regelmäßig trainieren**: Markiere Spam mit `X` und Ham mit `D` konsequent
+2. ✅ **False Positives korrigieren**: Falsch erkannte Mails mit `<F6>` zurücktrainieren (verschiebt automatisch in INBOX)
+3. ✅ **Datenbank sichern**: Die bogofilter-Datenbank enthält dein Training
+   ```bash
+   # Backup erstellen
+   tar -czf bogofilter-backup.tar.gz ~/.local/share/bogofilter/
+   ```
+4. ✅ **Pro Account trainieren**: Jede Datenbank lernt unabhängig
+
 ## 🔧 Erweiterte Konfiguration
 
 ### Push-Benachrichtigungen aktivieren (experimentel)
@@ -667,6 +841,13 @@ yay -S pam-gnupg
 ~/.notmuch-config                   # Notmuch Suchindex-Config
 ~/.password-store/                  # GPG-verschlüsselte Passwörter
 
+~/.local/share/bogofilter/          # bogofilter SPAM-Datenbanken (optional)
+├── email1@example.com/             # Datenbank pro Account
+└── email2@example.com/
+
+~/.local/bin/
+└── mail-filter-sync                # SPAM-Filter-Skript (optional)
+
 /usr/local/share/mutt-wizard/
 ├── mutt-wizard.muttrc              # Globale Mutt-Einstellungen
 ├── domains.csv                     # Bekannte E-Mail-Provider
@@ -731,6 +912,38 @@ Konsultiere deine IT-Abteilung für IMAP/SMTP-Details.
 Ubuntu, Debian, Mint haben oft veraltete Neomutt-Versionen. Bei Fehlern:
 1. Neueste Neomutt-Version manuell installieren, **oder**
 2. Fehlerhafte Zeilen in `/usr/local/share/mutt-wizard/mutt-wizard.muttrc` entfernen
+
+### mbsync Fehler: "hierarchy delimiter"
+
+**Problem:** Ein Ordnername enthält das Hierarchie-Delimiter des IMAP-Providers.
+
+Manche E-Mail-Provider (z.B. Posteo) verwenden `.` als Ordner-Trennzeichen. Wenn ein Ordner wie `Mailspring.Snoozed` einen Punkt im Namen hat, interpretiert mbsync das als Unterordner-Struktur und bricht mit einem Fehler ab:
+
+```
+IMAP error: mailbox name Mailspring.Snoozed contains server's hierarchy delimiter
+Error: channel deine@email.com: far side box Snoozed cannot be opened anymore.
+```
+
+**Lösung:** Den problematischen Ordner in der mbsync-Konfiguration ausschließen:
+
+```bash
+nvim ~/.mbsyncrc
+# oder falls du XDG nutzt:
+nvim ~/.config/mbsync/config
+```
+
+Im `Channel`-Abschnitt des betroffenen Accounts die `Patterns`-Zeile erweitern:
+
+```
+# Vorher:
+Patterns * !"[Gmail]/All Mail" !"*fts-flatcurve*" !"*virtual*"
+
+# Nachher (problematischen Ordner hinzufügen):
+# Mailspring.Snoozed enthält einen Punkt, den der Provider als Hierarchie-Delimiter interpretiert
+Patterns * !"[Gmail]/All Mail" !"*fts-flatcurve*" !"*virtual*" !"Mailspring.Snoozed"
+```
+
+**Weitere problematische Ordner** können ähnlich ausgeschlossen werden. Die `!`-Syntax bedeutet "diesen Ordner nicht synchronisieren".
 
 ## 🎨 Anpassung
 
@@ -802,6 +1015,7 @@ Diese deutsche Version basiert auf Luke Smith's [mutt-wizard](https://github.com
 - ✅ POP3-Unterstützung via `mpop`
 - ✅ Besseres Attachment-Handling
 - ✅ abook-Integration standardmäßig
+- ✅ bogofilter SPAM-Filterung (optional)
 
 ## 🤝 Beitragen
 

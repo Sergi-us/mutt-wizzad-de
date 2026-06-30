@@ -26,11 +26,19 @@ install:
 	chmod 755 $(DESTDIR)$(PREFIX)/share/zsh/site-functions/
 	cp -f completion/_mutt-wizard.zsh $(DESTDIR)$(PREFIX)/share/zsh/site-functions/_mutt-wizard.zsh
 	chmod 644 $(DESTDIR)$(PREFIX)/share/zsh/site-functions/_mutt-wizard.zsh
+	@echo ""
+	@echo "=== mail-filter-sync Installation ==="
+	@echo "Das mail-filter-sync Skript wird nach ~/.local/bin/ installiert."
+	@echo "Bitte führen Sie nach der Installation aus:"
+	@echo "  mkdir -p ~/.local/bin && cp bin/mail-filter-sync ~/.local/bin/ && chmod 755 ~/.local/bin/mail-filter-sync"
+	@echo "Oder verwenden Sie 'mw -b ihre@email.com' um es automatisch zu installieren."
 
 uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/mw $(DESTDIR)$(PREFIX)/bin/mailsync $(DESTDIR)$(PREFIX)/lib/mutt-wizard/openfile
 	rm -rf $(DESTDIR)$(PREFIX)/share/mutt-wizard  $(DESTDIR)$(PREFIX)/lib/mutt-wizard
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/mw.1  $(DESTDIR)$(MANPREFIX)/man1/mailsync.1
 	rm -f $(DESTDIR)$(PREFIX)/share/zsh/site-functions/_mutt-wizard.zsh
+	@echo "Hinweis: ~/.local/bin/mail-filter-sync wird nicht automatisch entfernt."
+	@echo "Falls gewünscht: rm ~/.local/bin/mail-filter-sync"
 
 .PHONY: install uninstall
