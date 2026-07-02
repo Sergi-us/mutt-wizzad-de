@@ -106,8 +106,8 @@ neomutt
 |----------------------------------|--------------------------------------------|
 | `mw -a email@example.com`        | E-Mail-Konto hinzufügen                    |
 | `mw -l`                          | Alle konfigurierten Konten auflisten       |
-| `mw -d`                          | Konto löschen (interaktiv)                 |
-| `mw -D email@example.com`        | Konto ohne Bestätigung löschen             |
+| `mw -d`                          | Konto löschen (mit Stufen-Auswahl)         |
+| `mw -D email@example.com`        | Konto löschen (mit Stufen-Auswahl)         |
 | `mw -g email@example.com`        | PGP-Verschlüsselung für Konto aktivieren   |
 | `mw -b email@example.com`        | SPAM-Filterung (bogofilter) für Konto aktivieren |
 | `mw -t 30`                       | Auto-Sync alle 30 Minuten aktivieren       |
@@ -116,6 +116,37 @@ neomutt
 | `mailsync`                       | Alle Konten synchronisieren                |
 | `mailsync email@example.com`     | Bestimmtes Konto synchronisieren           |
 | `pass edit mw-email@example.com` | Passwort ändern                            |
+
+### Lösch-Stufen bei Konto-Entfernung
+
+Beim Löschen eines Kontos (`mw -d` oder `mw -D`) kannst du zwischen drei Stufen wählen:
+
+| Stufe | Was wird gelöscht? |
+|-------|-------------------|
+| **1** | Nur Konfiguration (Mails und Passwort bleiben erhalten) |
+| **2** | Konfiguration + lokale Mails + Cache + Bogofilter-Daten |
+| **3** | ALLES vollständig (inkl. Passwort aus `pass`!) |
+
+**Stufe 1 - Nur Konfiguration:**
+- Entfernt nur die Mutt-Wizard-Konfiguration
+- Lokale Mails in `~/.local/share/mail/` bleiben erhalten
+- Passwort im `pass`-Store bleibt erhalten
+- Bogofilter-Datenbank bleibt erhalten
+- Cache bleibt erhalten
+- **Bei Neuaufsetzen mit `mw -a`:** Konto ist sofort wieder voll funktionsfähig, kein Passwort neu eingeben, keine Mails neu laden, Bogofilter ist bereits trainiert
+
+**Stufe 2 - Konfiguration + lokale Daten:**
+- Alles aus Stufe 1
+- Zusätzlich: Lokale Mails, Cache, Bogofilter-Datenbank
+- Passwort im `pass`-Store bleibt erhalten
+- **Bei Neuaufsetzen mit `mw -a`:** Passwort muss nicht neu eingegeben werden, aber `mailsync` lädt alle Mails vom Server neu, Bogofilter muss neu trainiert werden
+
+**Stufe 3 - Vollständig entfernen:**
+- Alles aus Stufe 2
+- Zusätzlich: Passwort wird aus `pass` gelöscht
+- ⚠️ **WARNUNG:** Erfordert Bestätigung mit "JA"
+- **Bei Neuaufsetzen mit `mw -a`:** Alles muss neu eingerichtet werden (Passwort, Mails, Bogofilter)
+- Konto ist komplett und unwiderruflich entfernt
 
 ### Optionen beim Hinzufügen eines Kontos
 

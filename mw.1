@@ -26,10 +26,18 @@ eine E-Mail-Adresse hinzufügen
 alle von mutt-wizard konfigurierten E-Mail-Konten auflisten
 .TP
 .B -d
-ein bereits konfiguriertes Konto auswählen und dessen Konfiguration entfernen
+ein bereits konfiguriertes Konto auswählen und dessen Konfiguration entfernen. Es wird ein Menü mit drei Lösch-Stufen angezeigt:
+.br
+Stufe 1: Nur Konfiguration entfernen (Mails und Passwort bleiben erhalten)
+.br
+Stufe 2: Konfiguration + lokale Mails + Cache + Bogofilter entfernen
+.br
+Stufe 3: ALLES vollständig entfernen (inkl. Passwort aus pass!)
 .TP
 .B -D deine@email.com
-ein konfiguriertes Konto ohne Bestätigung entfernen
+ein konfiguriertes Konto entfernen. Es wird ein Menü mit drei Lösch-Stufen angezeigt (siehe
+.B -d
+).
 .TP
 .B -y deine@email.com
 E-Mails für ein E-Mail-Konto herunterladen und hochladen
@@ -90,13 +98,6 @@ Einstellungen für ein Konto erstellen, das nur online ohne E-Mail-Synchronisati
 .B -f
 wird beim Setup dennoch versucht, eine Verbindung herzustellen, um Mailboxen zu erkennen.
 .TP
-.B -X
-Beim Entfernen eines E-Mail-Profils mit entweder
-.I -d
-oder
-.I -D
-auch die lokalen E-Mails löschen (löscht die E-Mails auf dem Server nicht).
-.TP
 .B -p
 POP-Protokoll statt IMAP verwenden. Erfordert
 .I mpop
@@ -133,9 +134,15 @@ und können vom Benutzer bei Bedarf bearbeitet werden. Beachten Sie, dass mutt-w
 -Datei erscheinen.
 .TP
 .B E-Mail-Löschung
-Die Löschaktion von mutt-wizard löscht Konfigurationsdateien und
-.I nicht
-heruntergeladene E-Mails aus Sicherheits- (und Zeit-)Gründen. Wenn Sie heruntergeladene E-Mails löschen möchten, tun Sie dies manuell, indem Sie sie aus dem obigen Verzeichnis entfernen.
+mutt-wizard bietet drei Lösch-Stufen beim Entfernen eines Kontos:
+
+Stufe 1 entfernt nur die Konfiguration (mbsyncrc, muttrc, msmtp, mpop, imapnotify). Lokale Mails, Cache, Bogofilter-Datenbank und Passwort im pass-Store bleiben erhalten. Bei Neuaufsetzen mit
+.I mw -a
+ist das Konto sofort wieder voll funktionsfähig.
+
+Stufe 2 entfernt zusätzlich lokale Mails, Cache und Bogofilter-Datenbank. Das Passwort bleibt im pass-Store. Bei Neuaufsetzen müssen Mails vom Server neu geladen und Bogofilter neu trainiert werden.
+
+Stufe 3 entfernt alles, inklusive des Passworts aus pass. Bei Neuaufsetzen muss alles neu eingerichtet werden. Stufe 3 erfordert eine Bestätigung mit "JA".
 .TP
 .B Standardeinstellungen
 mutt-wizard hat viele Standardeinstellungen, die sich darauf konzentrieren, es ästhetisch ansprechend zu machen und mehr vim-ähnliche Tastenbelegungen bereitzustellen. Diese befinden sich in

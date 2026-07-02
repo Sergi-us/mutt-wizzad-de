@@ -150,18 +150,89 @@ delete() {
 
 	[ -z "$fulladdr" ] && echo "$fulladdr ist kein gültiger Kontoname." && return 1
 
+	echo ""
+	echo "=== Lösch-Stufe für $fulladdr wählen ==="
+	echo ""
+	echo "1) Nur Konfiguration entfernen"
+	echo "   (Mails bleiben lokal erhalten, Passwort bleibt in pass)"
+	echo ""
+	echo "2) Konfiguration + lokale Daten entfernen"
+	echo "   (inkl. lokale Mails, Cache, Bogofilter-Daten)"
+	echo ""
+	echo "3) ALLES vollständig entfernen"
+	echo "   (inkl. Passwort aus pass!)"
+	echo ""
+	echo "0) Abbrechen"
+	echo ""
+	printf "Auswahl [0-3]: "
+	read -r level
+
+	case "$level" in
+	1)
+		delete_config
+		echo "Konfiguration für $fulladdr entfernt."
+		;;
+	2)
+		delete_data
+		echo "Konfiguration und lokale Daten für $fulladdr entfernt."
+		;;
+	3)
+		echo ""
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "!!                    WARNUNG! WARNUNG!                     !!"
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo "!!                                                           !!"
+		echo "!!  Sie sind dabei, das Konto VOLLSTÄNDIG zu entfernen:     !!"
+		echo "!!                                                           !!"
+		echo "!!  - Alle lokalen Mails werden GELÖSCHT                    !!"
+		echo "!!  - Das Passwort wird aus pass ENTFERNT                   !!"
+		echo "!!  - Alle Konfigurationsdaten werden gelöscht              !!"
+		echo "!!                                                           !!"
+		echo "!!  Konto: $fulladdr"
+		echo "!!                                                           !!"
+		echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+		echo ""
+		printf "Wirklich fortfahren? Tippen Sie 'JA' um zu bestätigen: "
+		read -r confirm
+		if [ "$confirm" = "JA" ]; then
+			delete_all
+			echo "Konto $fulladdr wurde vollständig entfernt."
+		else
+			echo "Abgebrochen."
+			return 1
+		fi
+		;;
+	*)
+		echo "Abgebrochen."
+		return 1
+		;;
+	esac
+}
+
+delete_config() {
 	sed -ibu "/IMAPStore $fulladdr-remote$/,/# End profile/d" "$mbsyncrc" 2>/dev/null
 	rm -f "$mbsyncrc"bu
-	rm -rf "${cachedir:?}/${fulladdr:?}" "$accdir/$fulladdr.muttrc" "$accdir/"[0-9]-"$fulladdr.muttrc"
+	rm -f "$accdir/$fulladdr.muttrc" "$accdir/"[0-9]-"$fulladdr.muttrc"
 	sed -ibu "/\([0-9]-\)\?$fulladdr.muttrc/d" "$muttrc" 2>/dev/null
 	rm -f "$muttrc"bu
 	sed -ibu "/account $fulladdr$/,/^\(\s*$\|account\)/d" "$msmtprc" 2>/dev/null
 	rm -f "$msmtprc"bu
 	sed -ibu "/account $fulladdr$/,/^\(\s*$\|account\)/d" "$mpoprc" 2>/dev/null
 	rm -f "$mpoprc"bu
-	pass rm -f "$passprefix$fulladdr" >/dev/null 2>&1
+	rm -f "$imapnotify/$fulladdr.conf" 2>/dev/null
+}
+
+delete_data() {
+	delete_config
+	safename="$(echo $fulladdr | sed 's/@/_/g')"
+	rm -rf "${cachedir:?}/${fulladdr:?}" "${cachedir:?}/${safename:?}" 2>/dev/null
+	rm -rf "${maildir:?}/${fulladdr:?}" 2>/dev/null
 	rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/bogofilter/${fulladdr}" 2>/dev/null
-	[ -n "${purge+x}" ] && safename="$(echo $fulladdr | sed 's/@/_/g')" && rm -rf "${cachedir:?}/${safename:?}" "${maildir:?}/${fulladdr:?}"
+}
+
+delete_all() {
+	delete_data
+	pass rm -f "$passprefix$fulladdr" >/dev/null 2>&1
 }
 
 askinfo() {
@@ -579,8 +650,8 @@ mw: mutt-wizard - E-Mail-Konten automatisch für mutt konfigurieren,
 Hauptaktionen:
   -a ihre@email.com	E-Mail-Adresse hinzufügen
   -l			Konfigurierte E-Mail-Adressen auflisten
-  -d			Bereits hinzugefügte Adresse entfernen
-  -D ihre@email.com	Konto ohne Bestätigung erzwungen entfernen
+  -d			Bereits hinzugefügte Adresse entfernen (mit Stufen-Auswahl)
+  -D ihre@email.com	Konto entfernen (mit Stufen-Auswahl)
   -g ihre@email.com	PGP-Verschlüsselung für ein Konto aktivieren
   -b ihre@email.com	SPAM-Filterung (bogofilter) für ein Konto aktivieren
   -t Zahl		Automatische Mailsynchronisation alle <Zahl> Minuten umschalten
@@ -597,9 +668,13 @@ Optionen, die mit -a erlaubt sind:
   -x	Passwort für das Konto (empfohlen in doppelten Anführungszeichen)
   -p	Für einen POP-Server statt IMAP hinzufügen
   -P	Pass-Präfix (Präfix der Datei, in der das Passwort gespeichert wird)
-  -X	Auch lokale E-Mails eines Kontos beim Löschen entfernen
   -o	Adresse konfigurieren, aber E-Mails online behalten
   -f	Typische englische Mailboxen annehmen, ohne Login-Versuch
+
+Lösch-Stufen (bei -d und -D):
+  1	Nur Konfiguration entfernen (Mails und Passwort bleiben erhalten)
+  2	Konfiguration + lokale Mails + Cache + Bogofilter entfernen
+  3	ALLES vollständig entfernen (inkl. Passwort aus pass!)
 
 HINWEIS: Sobald mindestens ein Konto hinzugefügt wurde, können Sie
 \`mbsync -a\` ausführen, um den E-Mail-Download zu starten.
@@ -632,7 +707,7 @@ reorder() {
 	' "$tempfile" >>"$muttrc"
 }
 
-while getopts "rfpXlhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
+while getopts "rfplhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	l) setact list ;;
 	r) setact reorder ;;
 	d) setact delete ;;
@@ -706,10 +781,6 @@ while getopts "rfpXlhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	x)
 		setact add
 		password="$OPTARG"
-		;;
-	X)
-		setact delete
-		purge=True
 		;;
 	t)
 		setact toggle
