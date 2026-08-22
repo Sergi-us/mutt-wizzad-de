@@ -295,7 +295,8 @@ getboxes() {
 	else
 		info="$(curl --location-trusted -s -m 5 --user "$login:$(pass "$passprefix$fulladdr" | head -1)" --url "${protocol:-imaps}://$imap:${iport:-993}")"
 		[ -z "$info" ] && errorexit
-		mailboxes="$(echo "$info" | grep -v HasChildren | sed "s/.*\" //;s/\"//g" | tr -d '\r')"
+		# Filtere \HasChildren aber behalte INBOX immer
+		mailboxes="$(echo "$info" | sed -n '/LIST.* INBOX$/ { s/.*LIST [^"]*"[^"]*" *//;s/["\r]//gp; }; /LIST.*HasNoChildren/ { s/.*LIST [^"]*"[^"]*" *//;s/["\r]//gp; }')"
 	fi
 	[ "$type" = "pop" ] && mailboxes="INBOX"
 	for x in $(
@@ -559,16 +560,13 @@ configure_spam() {
 	mkdir -p "$spamdir/cur" "$spamdir/new" "$spamdir/tmp"
 
 	# Entferne alte SPAM-Konfiguration falls vorhanden
-	sed -i '/^# === SPAM-Konfiguration ===/,/^# === Ende SPAM-Konfiguration ===/d' "$account_muttrc" 2>/dev/null
+	sed -i '/^# === SPAM-Konfiguration ===$/,/^# === Ende SPAM-Konfiguration ===$/d' "$account_muttrc" 2>/dev/null
 
 	# Füge neue SPAM-Konfiguration hinzu
 	cat >> "$account_muttrc" <<EOF
 
 # === SPAM-Konfiguration ===
 # bogofilter SPAM-Filterung für $email
-
-# Shift+d (D) = Als Ham lernen -> ab in den Trash (außer im Spam-Ordner)
-macro index D "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -n<enter><save-message>+Trash<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Ham lernen und in den Trash"
 
 # Shift+x (X) = Als Spam lernen -> ab in den neuen Spam-Ordner
 macro index X "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -s<enter><save-message>+Spam<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Spam lernen und in den Spam-Ordner"
@@ -579,14 +577,8 @@ macro index <F5> "<sync-mailbox><shell-escape>~/.local/bin/mail-filter-sync<ente
 # F6 = False Positive: Als Ham lernen und in INBOX verschieben
 macro index <F6> "<enter-command>set confirmappend=no delete=no<enter><pipe-message>bogofilter -d $bogodir -n<enter><save-message>+INBOX<enter><enter-command>set confirmappend=yes delete=yes<enter>" "Als Ham lernen und in INBOX verschieben"
 
-# Im Spam-Ordner: D = normales Löschen (nicht als Ham trainieren)
-folder-hook =Spam 'macro index D "<delete-message>" "Mail löschen"'
-
 # gS = Zum Spam-Ordner wechseln
 macro index,pager gS "<change-folder>=Spam<enter>" "Zum Spam-Ordner wechseln"
-
-# Spam-Ordner zur Sidebar hinzufügen
-mailboxes +=Spam
 # === Ende SPAM-Konfiguration ===
 EOF
 
@@ -642,6 +634,76 @@ ask_spam_config() {
 	return 0
 }
 
+syncfolders() {
+	local email="$1"
+	local account_muttrc="$accdir/$email.muttrc"
+
+	# Prüfe ob Account existiert
+	if [ ! -f "$account_muttrc" ]; then
+		echo "Fehler: Account '$email' nicht gefunden."
+		list
+		return 1
+	fi
+
+	# Hole IMAP-Host aus mbsyncrc
+	local mbsyncfile="${MBSYNCRC:-$HOME/.config/mbsync/config}"
+	[ ! -f "$mbsyncfile" ] && mbsyncfile="$HOME/.mbsyncrc"
+	[ ! -f "$mbsyncfile" ] && { echo "Fehler: mbsync-Konfiguration nicht gefunden." && return 1; }
+
+	local imap_host
+	imap_host="$(sed -n "/^IMAPStore ${email}-remote$/,/^$/ { /^Host / { s/^Host //; p } }" "$mbsyncfile")"
+	[ -z "$imap_host" ] && { echo "Fehler: IMAP-Host für '$email' nicht gefunden." && return 1; }
+
+	# Hole Passwort und liste Remote-Ordner
+	echo "Verbinde mit $imap_host..."
+	local pass_login
+	pass_login="$(pass "$email" 2>/dev/null | head -1)"
+	[ -z "$pass_login" ] && { echo "Fehler: Passwort für '$email' nicht in pass gefunden." && return 1; }
+
+	local info
+	info="$(curl --location-trusted -s -m 10 --user "$email:$pass_login" --url "imaps://${imap_host}:993" 2>&1)"
+	[ -z "$info" ] && { echo "Fehler: Verbindung zu $imap_host fehlgeschlagen." && return 1; }
+
+	# Parse Ordner (filtere \Noselect, behalte aber INBOX)
+	local remote_boxes
+	remote_boxes="$(echo "$info" | sed -n '/LIST.* INBOX$/ { s/.*LIST [^"]*"[^"]*" *//;s/["\r]//gp; }; /LIST.*HasNoChildren/ { s/.*LIST [^"]*"[^"]*" *//;s/["\r]//gp; }')"
+	[ -z "$remote_boxes" ] && { echo "Keine Remote-Ordner gefunden." && return 1; }
+
+	# Bestehende mailboxes aus .muttrc lesen (beide Formate: "=X" oder ="X")
+	local existing_boxes
+	existing_boxes="$(grep '^mailboxes ' "$account_muttrc" | sed 's/^mailboxes //;s/[[:space:]]*"/\n"/g' | sed 's/^"=//;s/^=//;s/"$//' | grep -v '^$' | sort -u)"
+
+	# Neue Ordner finden (nur in Remote, nicht lokal)
+	local new_boxes
+	new_boxes="$(comm -23 <(echo "$remote_boxes" | sort -u) <(echo "$existing_boxes" | sort -u))"
+
+	if [ -z "$new_boxes" ]; then
+		echo "✅ Alle Remote-Ordner sind bereits in der Konfiguration."
+		echo ""
+		echo "Konfigurierte Ordner:"
+		echo "$existing_boxes" | sed 's/^/  /'
+		return 0
+	fi
+
+	# Zeige neue Ordner
+	echo "Neue Remote-Ordner gefunden:"
+	echo "$new_boxes" | sed 's/^/  + /'
+	echo ""
+
+	# Aktualisiere mailboxes-Zeile
+	local all_boxes
+	all_boxes="$(echo -e "$existing_boxes\n$new_boxes" | sort -u | sed 's/.*/"=&"/' | paste -sd ' ' -)"
+	sed -i "s/^mailboxes .*/mailboxes $all_boxes/" "$account_muttrc"
+
+	echo "✅ mailboxes in $account_muttrc aktualisiert!"
+	echo ""
+	echo "Neue Ordner hinzugefügt:"
+	echo "$new_boxes" | sed 's/^/  + /'
+	echo ""
+	echo "Alle Ordner jetzt:"
+	echo "$all_boxes" | tr ' ' '\n' | sed 's/^/  /'
+}
+
 mwinfo() {
 	cat <<EOF
 mw: mutt-wizard - E-Mail-Konten automatisch für mutt konfigurieren,
@@ -654,6 +716,7 @@ Hauptaktionen:
   -D ihre@email.com	Konto entfernen (mit Stufen-Auswahl)
   -g ihre@email.com	PGP-Verschlüsselung für ein Konto aktivieren
   -b ihre@email.com	SPAM-Filterung (bogofilter) für ein Konto aktivieren
+  -v ihre@email.com	Remote-Ordner synchronisieren (mailboxes aktualisieren)
   -t Zahl		Automatische Mailsynchronisation alle <Zahl> Minuten umschalten
   -T			Automatische Mailsynchronisation umschalten
   -r			Kontonummern neu ordnen
@@ -707,7 +770,7 @@ reorder() {
 	' "$tempfile" >>"$muttrc"
 }
 
-while getopts "rfplhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
+while getopts "rfplhov:dTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 	l) setact list ;;
 	r) setact reorder ;;
 	d) setact delete ;;
@@ -726,6 +789,10 @@ while getopts "rfplhodTYD:y:g:b:i:I:s:S:u:a:n:P:x:m:t:" o; do case "${o}" in
 		;;
 	b)
 		setact enablespam
+		fulladdr="$OPTARG"
+		;;
+	v)
+		setact syncfolders
 		fulladdr="$OPTARG"
 		;;
 	a)
@@ -806,6 +873,7 @@ sync)
 	;;
 enablepgp) ask_pgp_config "$fulladdr" ;;
 enablespam) ask_spam_config "$fulladdr" ;;
+syncfolders) syncfolders "$fulladdr" ;;
 toggle) togglecron ;;
 reorder) reorder ;;
 info)

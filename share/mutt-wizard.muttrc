@@ -1,9 +1,12 @@
 # vim: filetype=neomuttrc
+## 2026-08-10 Mutt-Wizzard SARBS edition von Sergius
 # Diese Datei enthält alle Standardeinstellungen von mutt-wizard.
-# mutt-wizard wird diese Datei von Ihrer muttrc einbinden.
-# Im Interesse nahtloser Updates sollten Sie diese Datei nicht bearbeiten.
-# Wenn Sie Einstellungen überschreiben möchten, setzen Sie diese in Ihrer muttrc.
-set send_charset="us-ascii:utf-8"
+# mutt-wizard wird diese Datei von deiner mail@acount.de.muttrc einbinden.
+# Im Interesse nahtloser Updates solltest Du diese Datei nicht bearbeiten.
+# Falls Du Einstellungen überschreiben willst, mach das in der localen muttrc.
+
+# Versendet reine ASCII-Mails als utf-8, alles andere direkt als us-asci.
+set send_charset="utf-8:us-ascii"
 set mailcap_path = $HOME/.config/mutt/mailcap:/usr/local/share/mutt-wizard/mailcap:$mailcap_path
 set mime_type_query_command = "file --mime-type -b %s"
 set date_format="%y/%m/%d %I:%M%p"
@@ -12,65 +15,72 @@ set sort = 'reverse-date'
 set smtp_authenticators = 'gssapi:login'
 set query_command = "abook --mutt-query '%s'"
 set rfc2047_parameters = yes
-set sleep_time = 0		# Pause 0 Sekunden für Informationsnachrichten
-set markers = no		# Deaktiviert das `+` bei Zeilenumbrüchen
-set mark_old = no		# Ungelesene E-Mails bleiben ungelesen bis sie gelesen werden
-set mime_forward = no	# E-Mail-Körper wird als Text weitergeleitet
+set sleep_time = 0				# Pause 0 Sekunden für Informationsnachrichten
+set markers = no				# Deaktiviert das `+` bei Zeilenumbrüchen
+set mark_old = no				# Ungelesene E-Mails bleiben ungelesen bis sie gelesen werden
+set mime_forward = no			# E-Mail-Körper wird als Text weitergeleitet
 set forward_attachments = yes	# Anhänge werden mit E-Mail weitergeleitet
-set wait_key = no		# mutt fragt nicht "Taste drücken zum Fortfahren"
-set fast_reply			# Direkt zur Verfassung beim Antworten springen
-set fcc_attach			# Anhänge mit dem Körper speichern
+set wait_key = no				# mutt fragt nicht "Taste drücken zum Fortfahren"
+set fast_reply					# Direkt zur Verfassung beim Antworten springen
+set fcc_attach					# Anhänge mit dem Körper speichern
 set forward_format = "Fwd: %s"	# Format des Betreffs beim Weiterleiten
-set forward_quote		# Nachricht in Weiterleitungen einschließen
-set reverse_name		# Als Empfänger antworten
-set include			# Nachricht in Antworten einschließen
-set mail_check=60 # Um Verzögerungen bei IMAP mit manchen E-Mail-Providern zu vermeiden (z.B. Yahoo)
-auto_view text/html		# HTML automatisch anzeigen (mailcap verwendet lynx)
+set forward_quote				# Nachricht in Weiterleitungen einschließen
+set reverse_name				# Als Empfänger antworten
+set include						# Nachricht in Antworten einschließen
+set mail_check=60				# Um Verzögerungen bei IMAP mit manchen E-Mail-Providern zu vermeiden (z.B. Yahoo)
+auto_view text/html				# HTML automatisch anzeigen (mailcap verwendet lynx)
 auto_view application/pgp-encrypted
 #set display_filter = "tac | sed '/\\\[-- Autoview/,+1d' | tac" # Autoview-Nachrichten unterdrücken.
 alternative_order text/plain text/enriched text/html
 
+# noop bedeutet "tue Nichts" die Taste wurde quasi deaktiviert
 bind index,pager i noop
 bind index,pager g noop
 bind index \Cf noop
 bind index,pager M noop
 bind index,pager C noop
-
-# Allgemeine Neubelegungen
-bind index gg first-entry
-bind index j next-entry
-bind index k previous-entry
-bind attach <return> view-mailcap
-bind attach l view-mailcap
 bind editor <space> noop
+bind index h noop
+
+# INDEX Allgemeine Neubelegungen
+bind index gg first-entry			# Erste Mail
+bind index j next-entry				# Nächste Mail
+bind index k previous-entry			# Vorherige Mail
 bind index G last-entry
-bind pager,attach h exit
-bind pager j next-line
-bind pager k previous-line
-bind pager l view-attachments
 bind index D delete-message
 bind index U undelete-message
 bind index L limit
-bind index h noop
 bind index l display-message
 bind index,query <space> tag-entry
-#bind browser h goto-parent
-macro browser h '<change-dir><kill-line>..<enter>' "Zum übergeordneten Ordner gehen"
 bind index,pager H view-raw-message
-bind browser l select-entry
-bind browser gg top-page
-bind browser G bottom-page
-bind pager gg top
-bind pager G bottom
 bind index,pager,browser d half-down
 bind index,pager,browser u half-up
 bind index,pager S sync-mailbox
 bind index,pager R group-reply
 bind index \031 previous-undeleted	# Mausrad
 bind index \005 next-undeleted		# Mausrad
+
+# ATTACH Belegungen
+bind attach <return> view-mailcap
+bind attach l view-mailcap
+
+# PAGER Belegungen
+bind pager,attach h exit
+bind pager j next-line
+bind pager k previous-line
+bind pager l view-attachments
+bind pager gg top
+bind pager G bottom
 bind pager \031 previous-line		# Mausrad
 bind pager \005 next-line		# Mausrad
+
+# BROWSER Bining
+bind browser l select-entry
+bind browser gg top-page
+bind browser G bottom-page
 bind editor <Tab> complete-query
+#bind browser h goto-parent
+macro browser h '<change-dir><kill-line>..<enter>' "Zum übergeordneten Ordner gehen"
 
 macro index,pager gi "<change-folder>=INBOX<enter>" "Zum Posteingang wechseln"
 macro index,pager Mi ";<save-message>=INBOX<enter>" "E-Mail in Posteingang verschieben"
